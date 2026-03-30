@@ -2,11 +2,15 @@ class Quartier {
   final int id;
   final String nom;
   final int communeId;
+  final double? latitude;
+  final double? longitude;
 
   Quartier({
     required this.id,
     required this.nom,
     required this.communeId,
+    this.latitude,
+    this.longitude,
   });
 
   factory Quartier.fromJson(Map<String, dynamic> json) {
@@ -14,7 +18,18 @@ class Quartier {
       id: json['id'],
       nom: json['nom'],
       communeId: json['commune_id'],
+      latitude: json['latitude'] != null ? double.parse(json['latitude'].toString()) : null,
+      longitude: json['longitude'] != null ? double.parse(json['longitude'].toString()) : null,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'nom': nom,
+      'commune_id': communeId,
+      'latitude': latitude,
+      'longitude': longitude,
+    };
   }
 }
 

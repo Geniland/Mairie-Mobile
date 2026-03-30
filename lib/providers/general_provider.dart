@@ -8,6 +8,8 @@ import '../models/ticket.dart';
 import '../models/others.dart';
 import '../services/api_service.dart';
 
+import 'package:geolocator/geolocator.dart';
+
 class GeneralProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
 
@@ -19,6 +21,14 @@ class GeneralProvider with ChangeNotifier {
   List<Quartier> _quartiers = [];
   List<TypeTaxe> _typeTaxes = [];
   List<Ticket> _tickets = [];
+
+
+  double _totalPaye = 0;
+  int _totalTickets = 0;
+  int _totalTaxes = 0;
+  int _agentsActifs = 0;
+  double _tauxRecouvrement = 0;
+
 
   // ------------------- ETATS -------------------
   bool _isLoading = false;
@@ -32,6 +42,13 @@ class GeneralProvider with ChangeNotifier {
   List<Quartier> get quartiers => _quartiers;
   List<TypeTaxe> get typeTaxes => _typeTaxes;
   List<Ticket> get tickets => _tickets;
+
+  double get totalPaye => _totalPaye;
+  int get totalTickets => _totalTickets;
+  int get totalTaxes => _totalTaxes;
+  int get agentsActifs => _agentsActifs;
+
+  double get tauxRecouvrement => _tauxRecouvrement;
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -226,7 +243,7 @@ class GeneralProvider with ChangeNotifier {
     }
   }
 
-  // ------------------- QUARTIERS -------------------
+  // -------------------RECUPERATION DE  QUARTIERS DANS PAYEMENT-------------------
   Future<void> fetchQuartiers(int communeId) async {
     try {
       final response = await _apiService.get('quartiers/commune/$communeId');
@@ -246,6 +263,36 @@ class GeneralProvider with ChangeNotifier {
       print('Erreur fetchQuartiers: $e');
     }
   }
+
+  Future<bool> createQuartier(Quartier quartier) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.post('quartiers', quartier.toJson());
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 201 && data['status'] == true) {
+        // Optionnel : recharger les quartiers si on est sur une vue filtrée
+        // ou simplement notifier le succès
+        return true;
+      } else {
+        _error = data['message'] ?? "Erreur lors de la création du quartier";
+        return false;
+      }
+    } catch (e) {
+      print("Erreur createQuartier: $e");
+      _error = "Erreur serveur: $e";
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+
+
 
   // ------------------- TYPES TAXES -------------------
   Future<void> fetchTypeTaxes() async {
@@ -290,4 +337,25 @@ class GeneralProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> fetchDashboardStats() async {
+  try {
+    final response = await _apiService.get('dashboard/stats');
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['status'] == true) {
+      _totalPaye = double.parse(data['data']['total_paye'].toString());
+      _totalTickets = data['data']['total_tickets'];
+      _totalTaxes = data['data']['total_taxes'];
+      _agentsActifs = data['data']['agents_actifs'];
+      _tauxRecouvrement = (data['data']['taux_recouvrement'] as num?)?.toDouble() ?? 0.0;
+
+      notifyListeners();
+    }
+  } catch (e) {
+    print("Erreur fetchDashboardStats: $e");
+  }
+}
+
+
 }

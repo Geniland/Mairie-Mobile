@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Cette application nécessite l'accès à votre position pour enregistrer les quartiers.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Cette application nécessite l'accès à votre position pour enregistrer les quartiers.</string>
 </dict>
 </plist>

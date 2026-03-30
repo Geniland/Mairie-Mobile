@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppConstants {
   // Base URL for the API
-  static const String baseUrl = 'https://159a-102-64-161-253.ngrok-free.app/api'; // Replace with actual server URL if different
+  static const String baseUrl = 'https://ba18-2c0f-f0f8-855-4f00-6409-ff71-ec2d-65ea.ngrok-free.app/api'; // Replace with actual server URL if different
 
   // Colors based on the web design
   static const Color primaryColor = Color(0xFF0EA5E9);

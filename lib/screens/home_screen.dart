@@ -2,17 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
+import '../providers/general_provider.dart';
 import '../utils/constants.dart';
 import 'contribuable_screen.dart';
 import 'taxe_screen.dart';
 import 'payment_screen.dart';
 import 'ticketsScreen.dart';
+import 'quartier_screen.dart';
 import 'login_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    Future.microtask(() {
+      if (!mounted) return;
+      Provider.of<GeneralProvider>(context, listen: false).fetchDashboardStats();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
+    final provider = Provider.of<GeneralProvider>(context);
     final user = auth.user;
 
     return Scaffold(
@@ -26,6 +44,12 @@ class HomeScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () {
+              provider.fetchDashboardStats();
+            },
+          ),
+          IconButton(
             icon: Icon(Icons.logout),
             onPressed: () {
               auth.logout();
@@ -37,35 +61,41 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
       drawer: _buildDrawer(context, user),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bienvenue, ${user?.name ?? 'Utilisateur'}',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppConstants.textPrimary,
+      body: provider.isLoading
+          ? Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: () => provider.fetchDashboardStats(),
+              child: SingleChildScrollView(
+                physics: AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Bienvenue, ${user?.name ?? 'Utilisateur'}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppConstants.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 25),
+                    _buildQuickActions(context),
+                    SizedBox(height: 30),
+                    Text(
+                      'Statistiques Rapides',
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppConstants.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 15),
+                    _buildStatsGrid(provider),
+                  ],
+                ),
               ),
             ),
-            SizedBox(height: 25),
-            _buildQuickActions(context),
-            SizedBox(height: 30),
-            Text(
-              'Statistiques Rapides',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppConstants.textPrimary,
-              ),
-            ),
-            SizedBox(height: 15),
-            _buildStatsGrid(),
-          ],
-        ),
-      ),
     );
   }
 
@@ -93,7 +123,8 @@ class HomeScreen extends StatelessWidget {
             title: Text('Contribuables'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => ContribuableScreen()));
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => ContribuableScreen()));
             },
           ),
           ListTile(
@@ -101,7 +132,8 @@ class HomeScreen extends StatelessWidget {
             title: Text('Taxes'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => TaxeScreen()));
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => TaxeScreen()));
             },
           ),
           ListTile(
@@ -109,7 +141,26 @@ class HomeScreen extends StatelessWidget {
             title: Text('Paiements'),
             onTap: () {
               Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => PaymentScreen()));
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => PaymentScreen()));
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.receipt_long),
+            title: Text('Tickets'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => ticketsScreen()));
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.map),
+            title: Text('Quartiers'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => QuartierScreen()));
             },
           ),
         ],
@@ -130,34 +181,39 @@ class HomeScreen extends StatelessWidget {
           'Ajouter Contribuable',
           Icons.person_add,
           Colors.blue,
-          () => Navigator.push(context, MaterialPageRoute(builder: (context) => ContribuableScreen())),
+          () => Navigator.push(context,
+              MaterialPageRoute(builder: (context) => ContribuableScreen())),
         ),
         _buildActionCard(
           context,
           'Nouvelle Taxe',
           Icons.add_task,
           Colors.orange,
-          () => Navigator.push(context, MaterialPageRoute(builder: (context) => TaxeScreen())),
+          () => Navigator.push(
+              context, MaterialPageRoute(builder: (context) => TaxeScreen())),
         ),
         _buildActionCard(
           context,
           'Nouveau Paiement',
           Icons.account_balance_wallet,
           Colors.green,
-          () => Navigator.push(context, MaterialPageRoute(builder: (context) => PaymentScreen())),
+          () => Navigator.push(context,
+              MaterialPageRoute(builder: (context) => PaymentScreen())),
         ),
         _buildActionCard(
           context,
           'Historique Tickets',
           Icons.receipt_long,
           Colors.purple,
-          () => Navigator.push(context, MaterialPageRoute(builder: (context) => ticketsScreen())),
+          () => Navigator.push(context,
+              MaterialPageRoute(builder: (context) => ticketsScreen())),
         ),
       ],
     );
   }
 
-  Widget _buildActionCard(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(BuildContext context, String title, IconData icon,
+      Color color, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -193,7 +249,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(GeneralProvider provider) {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -202,15 +258,36 @@ class HomeScreen extends StatelessWidget {
       mainAxisSpacing: 15,
       childAspectRatio: 1.5,
       children: [
-        _buildStatCard('Recouvrement', '75%', Icons.trending_up, Colors.green),
-        _buildStatCard('Total Payé', '2.5M FCFA', Icons.attach_money, Colors.blue),
-        _buildStatCard('Agents Actifs', '12', Icons.groups, Colors.orange),
-        _buildStatCard('Tickets émis', '450', Icons.confirmation_number, Colors.purple),
+        _buildStatCard(
+          'Recouvrement',
+          '${provider.tauxRecouvrement}%',
+          Icons.trending_up,
+          Colors.green,
+        ),
+        _buildStatCard(
+          'Total Payé',
+          '${provider.totalPaye.toStringAsFixed(0)} FCFA',
+          Icons.attach_money,
+          Colors.blue,
+        ),
+        _buildStatCard(
+          'Agents Actifs',
+          '${provider.agentsActifs}',
+          Icons.groups,
+          Colors.orange,
+        ),
+        _buildStatCard(
+          'Tickets émis',
+          '${provider.totalTickets}',
+          Icons.confirmation_number,
+          Colors.purple,
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
