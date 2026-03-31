@@ -109,6 +109,36 @@ class GeneralProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> updateContribuable(Contribuable contribuable) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.put(
+          'contribuables/${contribuable.id}', contribuable.toJson());
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == true) {
+        final updated = Contribuable.fromJson(data['data']);
+        final index = _contribuables.indexWhere((c) => c.id == updated.id);
+        if (index != -1) {
+          _contribuables[index] = updated;
+        }
+        return true;
+      } else {
+        _error = data['message'] ?? 'Erreur lors de la mise à jour';
+        return false;
+      }
+    } catch (e) {
+      _error = 'Erreur de connexion au serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   // ------------------- TAXES -------------------
   Future<void> fetchTaxes() async {
     _isLoading = true;
@@ -152,6 +182,35 @@ class GeneralProvider with ChangeNotifier {
         return true;
       } else {
         _error = data['message'] ?? 'Erreur lors de la création de la taxe';
+        return false;
+      }
+    } catch (e) {
+      _error = 'Erreur de connexion au serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateTaxe(Taxe taxe) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiService.put('taxes/${taxe.id}', taxe.toJson());
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == true) {
+        final updated = Taxe.fromJson(data['data']);
+        final index = _taxes.indexWhere((t) => t.id == updated.id);
+        if (index != -1) {
+          _taxes[index] = updated;
+        }
+        return true;
+      } else {
+        _error = data['message'] ?? 'Erreur lors de la mise à jour';
         return false;
       }
     } catch (e) {

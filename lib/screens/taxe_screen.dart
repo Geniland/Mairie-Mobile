@@ -25,11 +25,11 @@ class _TaxeScreenState extends State<TaxeScreen> {
     });
   }
 
-  void _showAddDialog() {
+  void _showAddDialog({Taxe? taxe}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => AddTaxeForm(),
+      builder: (context) => AddTaxeForm(taxe: taxe),
     );
   }
 
@@ -58,7 +58,7 @@ class _TaxeScreenState extends State<TaxeScreen> {
               ),
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
+        onPressed: () => _showAddDialog(),
         backgroundColor: AppConstants.primaryColor,
         child: Icon(Icons.add, color: Colors.white),
       ),
@@ -97,20 +97,30 @@ class _TaxeScreenState extends State<TaxeScreen> {
             ),
           ],
         ),
-        trailing: Container(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: isPaid ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            item.statut.toUpperCase(),
-            style: TextStyle(
-              color: isPaid ? Colors.green : Colors.orange,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isPaid ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                item.statut.toUpperCase(),
+                style: TextStyle(
+                  color: isPaid ? Colors.green : Colors.orange,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
-          ),
+            if (!isPaid)
+              IconButton(
+                icon: Icon(Icons.edit, color: AppConstants.primaryColor),
+                onPressed: () => _showAddDialog(taxe: item),
+              ),
+          ],
         ),
       ),
     );
@@ -118,19 +128,40 @@ class _TaxeScreenState extends State<TaxeScreen> {
 }
 
 class AddTaxeForm extends StatefulWidget {
+  final Taxe? taxe;
+
+  AddTaxeForm({this.taxe});
+
   @override
   _AddTaxeFormState createState() => _AddTaxeFormState();
 }
 
 class _AddTaxeFormState extends State<AddTaxeForm> {
   final _formKey = GlobalKey<FormState>();
-  final _montantController = TextEditingController();
+  late TextEditingController _montantController;
   
   int? _selectedContribuable;
   int? _selectedTypeTaxe;
   int? _selectedCommune;
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(Duration(days: 365));
+  late DateTime _startDate;
+  late DateTime _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _montantController = TextEditingController(text: widget.taxe?.montant.toString() ?? '');
+    _selectedContribuable = widget.taxe?.contribuableId;
+    _selectedTypeTaxe = widget.taxe?.typeTaxeId;
+    _selectedCommune = widget.taxe?.communeId;
+    _startDate = widget.taxe?.periodeDebut ?? DateTime.now();
+    _endDate = widget.taxe?.periodeFin ?? DateTime.now().add(Duration(days: 365));
+  }
+
+  @override
+  void dispose() {
+    _montantController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -260,21 +291,29 @@ class _AddTaxeFormState extends State<AddTaxeForm> {
                   onPressed: provider.isLoading ? null : () async {
                     if (_formKey.currentState!.validate()) {
                       final taxe = Taxe(
+                        id: widget.taxe?.id,
                         communeId: _selectedCommune!,
                         contribuableId: _selectedContribuable!,
                         typeTaxeId: _selectedTypeTaxe!,
-                        agentId: auth.user!.id,
+                        agentId: widget.taxe?.agentId ?? auth.user!.id,
                         montant: double.parse(_montantController.text),
                         periodeDebut: _startDate,
                         periodeFin: _endDate,
-                        statut: 'impayer',
+                        statut: widget.taxe?.statut ?? 'impayer',
                       );
-                      final success = await provider.createTaxe(taxe, agentId: auth.user?.id);
+
+                      bool success;
+                      if (widget.taxe == null) {
+                        success = await provider.createTaxe(taxe, agentId: auth.user?.id);
+                      } else {
+                        success = await provider.updateTaxe(taxe);
+                      }
+
                       if (success) {
                         Navigator.pop(context);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(provider.error ?? 'Erreur lors de la création')),
+                          SnackBar(content: Text(provider.error ?? 'Erreur lors de l\'enregistrement')),
                         );
                       }
                     }
@@ -282,7 +321,8 @@ class _AddTaxeFormState extends State<AddTaxeForm> {
                   style: ElevatedButton.styleFrom(backgroundColor: AppConstants.primaryColor),
                   child: provider.isLoading 
                     ? CircularProgressIndicator(color: Colors.white)
-                    : Text('Générer Taxe', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    : Text(widget.taxe == null ? 'Générer Taxe' : 'Mettre à jour', 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               SizedBox(height: 20),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/general_provider.dart';
 import '../providers/auth_provider.dart';
@@ -11,23 +12,51 @@ import '../utils/constants.dart';
 import 'ticket_screen.dart';
 import 'ticketsScreen.dart';
 
-
 class PaymentScreen extends StatefulWidget {
   @override
   _PaymentScreenState createState() => _PaymentScreenState();
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
+  Set<int> _printedPayments = {}; // ✅ stocke les paiements déjà imprimés
+  bool _loadingPrinted = true;
+
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+
+    Future.microtask(() async {
       if (!mounted) return;
+
+      await _loadPrintedPayments();
+
       final provider = Provider.of<GeneralProvider>(context, listen: false);
       provider.fetchPayments();
       provider.fetchTaxes();
       provider.fetchCommunes();
     });
+  }
+
+  Future<void> _loadPrintedPayments() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList("printed_payments") ?? [];
+
+    setState(() {
+      _printedPayments = list.map((e) => int.tryParse(e) ?? 0).toSet();
+      _printedPayments.remove(0);
+      _loadingPrinted = false;
+    });
+  }
+
+  Future<void> _savePrintedPayment(int paymentId) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    _printedPayments.add(paymentId);
+
+    await prefs.setStringList(
+      "printed_payments",
+      _printedPayments.map((e) => e.toString()).toList(),
+    );
   }
 
   void _showAddDialog() {
@@ -42,6 +71,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<GeneralProvider>(context);
 
+    if (_loadingPrinted) {
+      return Scaffold(
+        backgroundColor: AppConstants.backgroundColor,
+        appBar: AppBar(
+          title: Text('Historique Paiements'),
+          backgroundColor: AppConstants.secondaryColor,
+          foregroundColor: Colors.white,
+        ),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppConstants.backgroundColor,
       appBar: AppBar(
@@ -49,7 +90,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         backgroundColor: AppConstants.secondaryColor,
         foregroundColor: Colors.white,
       ),
-
       body: provider.isLoading && provider.payments.isEmpty
           ? Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -64,7 +104,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
 
-      // ✅ bouton historique tickets bien placé
+      // bouton historique tickets
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(12.0),
         child: ElevatedButton.icon(
@@ -100,6 +140,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Widget _buildPaymentCard(Payment item) {
     final formatter = DateFormat('dd/MM/yyyy HH:mm');
 
+    final int? paymentId = item.id;
+    final bool alreadyPrinted =
+        paymentId != null && _printedPayments.contains(paymentId);
+
     return Card(
       margin: EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -126,18 +170,47 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 fontSize: 18,
               ),
             ),
+            if (alreadyPrinted)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  "Ticket déjà imprimé",
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
           ],
         ),
+
+        // ✅ print button désactivé définitivement
         trailing: IconButton(
-          icon: Icon(Icons.print, color: AppConstants.primaryColor),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TicketScreen(payment: item),
-              ),
-            );
-          },
+          icon: Icon(
+            Icons.print,
+            color: alreadyPrinted ? Colors.grey : AppConstants.primaryColor,
+          ),
+          onPressed: alreadyPrinted
+              ? null
+              : () async {
+                  if (paymentId == null) return;
+
+                  // désactiver immédiatement pour éviter double clic
+                  setState(() {
+                    _printedPayments.add(paymentId);
+                  });
+
+                  // sauvegarder définitivement
+                  await _savePrintedPayment(paymentId);
+
+                  // ouvrir ticket
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TicketScreen(payment: item),
+                    ),
+                  );
+                },
         ),
       ),
     );
@@ -186,7 +259,9 @@ class _AddPaymentFormState extends State<AddPaymentForm> {
               Text(
                 'Effectuer un paiement',
                 style: GoogleFonts.poppins(
-                    fontSize: 20, fontWeight: FontWeight.bold),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               SizedBox(height: 20),
 
@@ -209,6 +284,7 @@ class _AddPaymentFormState extends State<AddPaymentForm> {
                     _selectedCommune = val;
                     _selectedQuartier = null;
                   });
+
                   if (val != null) {
                     provider.fetchQuartiers(val);
                   }
@@ -296,8 +372,8 @@ class _AddPaymentFormState extends State<AddPaymentForm> {
                             if (_selectedTaxe?.id == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content:
-                                        Text("Veuillez choisir une taxe")),
+                                  content: Text("Veuillez choisir une taxe"),
+                                ),
                               );
                               return;
                             }
@@ -331,8 +407,10 @@ class _AddPaymentFormState extends State<AddPaymentForm> {
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                    content: Text(provider.error ??
-                                        'Erreur lors du paiement')),
+                                  content: Text(
+                                    provider.error ?? 'Erreur lors du paiement',
+                                  ),
+                                ),
                               );
                             }
                           }
@@ -345,8 +423,9 @@ class _AddPaymentFormState extends State<AddPaymentForm> {
                       : Text(
                           'Confirmer le Paiement',
                           style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                 ),
               ),

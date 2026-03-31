@@ -24,11 +24,11 @@ class _ContribuableScreenState extends State<ContribuableScreen> {
     });
   }
 
-  void _showAddDialog() {
+  void _showAddDialog({Contribuable? contribuable}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => AddContribuableForm(),
+      builder: (context) => AddContribuableForm(contribuable: contribuable),
     );
   }
 
@@ -39,7 +39,7 @@ class _ContribuableScreenState extends State<ContribuableScreen> {
     return Scaffold(
       backgroundColor: AppConstants.backgroundColor,
       appBar: AppBar(
-        title: Text('Contribuables'),
+        title: Text('Gestion des Contribuables'),
         backgroundColor: AppConstants.secondaryColor,
         foregroundColor: Colors.white,
       ),
@@ -57,7 +57,7 @@ class _ContribuableScreenState extends State<ContribuableScreen> {
               ),
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDialog,
+        onPressed: () => _showAddDialog(),
         backgroundColor: AppConstants.primaryColor,
         child: Icon(Icons.add, color: Colors.white),
       ),
@@ -101,16 +101,25 @@ class _ContribuableScreenState extends State<ContribuableScreen> {
               ),
           ],
         ),
-        trailing: Container(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            color: AppConstants.primaryColor.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            item.type,
-            style: TextStyle(color: AppConstants.primaryColor, fontSize: 12),
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppConstants.primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                item.type,
+                style: TextStyle(color: AppConstants.primaryColor, fontSize: 12),
+              ),
+            ),
+            IconButton(
+              icon: Icon(Icons.edit, color: AppConstants.primaryColor),
+              onPressed: () => _showAddDialog(contribuable: item),
+            ),
+          ],
         ),
       ),
     );
@@ -118,19 +127,49 @@ class _ContribuableScreenState extends State<ContribuableScreen> {
 }
 
 class AddContribuableForm extends StatefulWidget {
+  final Contribuable? contribuable;
+
+  AddContribuableForm({this.contribuable});
+
   @override
   _AddContribuableFormState createState() => _AddContribuableFormState();
 }
 
 class _AddContribuableFormState extends State<AddContribuableForm> {
   final _formKey = GlobalKey<FormState>();
-  final _nomController = TextEditingController();
-  final _telController = TextEditingController();
-  final _idController = TextEditingController();
-  final _adresseController = TextEditingController();
+  late TextEditingController _nomController;
+  late TextEditingController _telController;
+  late TextEditingController _idController;
+  late TextEditingController _adresseController;
   
   int? _selectedCommune;
-  String? _selectedType = 'Particulier';
+  String? _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _nomController = TextEditingController(text: widget.contribuable?.nom ?? '');
+    _telController = TextEditingController(text: widget.contribuable?.telephone ?? '');
+    _idController = TextEditingController(text: widget.contribuable?.numeroIdentifiant ?? '');
+    _adresseController = TextEditingController(text: widget.contribuable?.adresse ?? '');
+    _selectedCommune = widget.contribuable?.communeId;
+    
+    // Normaliser le type pour le dropdown (casse minuscule pour correspondre à la DB)
+    String type = widget.contribuable?.type.toLowerCase() ?? 'particulier';
+    if (!['particulier', 'entreprise', 'marchand'].contains(type)) {
+      type = 'particulier';
+    }
+    _selectedType = type;
+  }
+
+  @override
+  void dispose() {
+    _nomController.dispose();
+    _telController.dispose();
+    _idController.dispose();
+    _adresseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -188,9 +227,11 @@ class _AddContribuableFormState extends State<AddContribuableForm> {
               DropdownButtonFormField<String>(
                 value: _selectedType,
                 decoration: InputDecoration(labelText: 'Type'),
-                items: ['Particulier', 'Entreprise', 'Marchand']
-                    .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                    .toList(),
+                items: [
+                  DropdownMenuItem(value: 'particulier', child: Text('Particulier')),
+                  DropdownMenuItem(value: 'entreprise', child: Text('Entreprise')),
+                  DropdownMenuItem(value: 'marchand', child: Text('Marchand')),
+                ],
                 onChanged: (val) => setState(() => _selectedType = val),
               ),
               TextFormField(
@@ -209,7 +250,8 @@ class _AddContribuableFormState extends State<AddContribuableForm> {
                   onPressed: provider.isLoading ? null : () async {
                     if (_formKey.currentState!.validate()) {
                       final contrib = Contribuable(
-                        agentId: auth.user?.id,
+                        id: widget.contribuable?.id,
+                        agentId: widget.contribuable?.agentId ?? auth.user?.id,
                         communeId: _selectedCommune!,
                         nom: _nomController.text,
                         telephone: _telController.text,
@@ -217,12 +259,19 @@ class _AddContribuableFormState extends State<AddContribuableForm> {
                         numeroIdentifiant: _idController.text.isEmpty ? null : _idController.text,
                         adresse: _adresseController.text.isEmpty ? null : _adresseController.text,
                       );
-                      final success = await provider.createContribuable(contrib, agentId: auth.user?.id);
+
+                      bool success;
+                      if (widget.contribuable == null) {
+                        success = await provider.createContribuable(contrib, agentId: auth.user?.id);
+                      } else {
+                        success = await provider.updateContribuable(contrib);
+                      }
+
                       if (success) {
                         Navigator.pop(context);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(provider.error ?? 'Erreur lors de la création')),
+                          SnackBar(content: Text(provider.error ?? 'Erreur lors de l\'enregistrement')),
                         );
                       }
                     }
@@ -230,7 +279,8 @@ class _AddContribuableFormState extends State<AddContribuableForm> {
                   style: ElevatedButton.styleFrom(backgroundColor: AppConstants.primaryColor),
                   child: provider.isLoading 
                     ? CircularProgressIndicator(color: Colors.white)
-                    : Text('Enregistrer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    : Text(widget.contribuable == null ? 'Enregistrer' : 'Mettre à jour', 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
               SizedBox(height: 20),
